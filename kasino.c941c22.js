@@ -499,16 +499,7 @@ assert(globalThis.Int32Array && globalThis.Float64Array && Int32Array.prototype.
        'JS engine does not provide full typed array support');
 
 function preRun() {
-  if (Module['preRun']) {
-    if (typeof Module['preRun'] == 'function') Module['preRun'] = [Module['preRun']];
-    while (Module['preRun'].length) {
-      addOnPreRun(Module['preRun'].shift());
-    }
-  }
-  consumedModuleProp('preRun');
-  // Begin ATPRERUNS hooks
-  callRuntimeCallbacks(onPreRuns);
-  // End ATPRERUNS hooks
+  // No ATPRERUNS hooks
 }
 
 function initRuntime() {
@@ -538,17 +529,7 @@ function postRun() {
   checkStackCookie();
    // PThreads reuse the runtime from the main thread.
 
-  if (Module['postRun']) {
-    if (typeof Module['postRun'] == 'function') Module['postRun'] = [Module['postRun']];
-    while (Module['postRun'].length) {
-      addOnPostRun(Module['postRun'].shift());
-    }
-  }
-  consumedModuleProp('postRun');
-
-  // Begin ATPOSTRUNS hooks
-  callRuntimeCallbacks(onPostRuns);
-  // End ATPOSTRUNS hooks
+  // No ATPOSTRUNS hooks
 }
 
 /** @param {string|number=} what */
@@ -606,9 +587,6 @@ function findWasmBinary() {
 }
 
 function getBinarySync(file) {
-  if (file == wasmBinaryFile && wasmBinary) {
-    return new Uint8Array(wasmBinary);
-  }
   if (readBinary) {
     return readBinary(file);
   }
@@ -727,25 +705,6 @@ async function createWasm() {
 
   var info = getWasmImports();
 
-  // User shell pages can write their own Module.instantiateWasm = function(imports, successCallback) callback
-  // to manually instantiate the Wasm module themselves. This allows pages to
-  // run the instantiation parallel to any other async startup actions they are
-  // performing.
-  // Also pthreads and wasm workers initialize the wasm instance through this
-  // path.
-  if (Module['instantiateWasm']) {
-    return new Promise((resolve, reject) => {
-      try {
-        Module['instantiateWasm'](info, (inst, mod) => {
-          resolve(receiveInstance(inst, mod));
-        });
-      } catch(e) {
-        err(`Module.instantiateWasm callback failed with error: ${e}`);
-        reject(e);
-      }
-    });
-  }
-
   wasmBinaryFile ??= findWasmBinary();
   var result = await instantiateAsync(wasmBinary, wasmBinaryFile, info);
   var exports = receiveInstantiationResult(result);
@@ -764,18 +723,6 @@ async function createWasm() {
         this.status = status;
       }
     }
-
-  var callRuntimeCallbacks = (callbacks) => {
-      while (callbacks.length > 0) {
-        // Pass the module as the first argument.
-        callbacks.shift()(Module);
-      }
-    };
-  var onPostRuns = [];
-  var addOnPostRun = (cb) => onPostRuns.push(cb);
-
-  var onPreRuns = [];
-  var addOnPreRun = (cb) => onPreRuns.push(cb);
 
   var runDependencies = 0;
   
@@ -842,6 +789,12 @@ async function createWasm() {
       }
     };
 
+  var callRuntimeCallbacks = (callbacks) => {
+      while (callbacks.length > 0) {
+        // Pass the module as the first argument.
+        callbacks.shift()(Module);
+      }
+    };
 
   var dynCalls = {
   };
@@ -890,8 +843,6 @@ async function createWasm() {
       default: abort(`invalid type for getValue: ${type}`);
     }
   }
-
-  var noExitRuntime = true;
 
   var ptrToString = (ptr) => {
       assert(typeof ptr === 'number', `ptrToString expects a number, got ${typeof ptr}`);
@@ -3254,9 +3205,6 @@ var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
         FS.initialized = true;
   
         // Allow Module.stdin etc. to provide defaults, if none explicitly passed to us here
-        input ??= Module['stdin'];
-        output ??= Module['stdout'];
-        error ??= Module['stderr'];
   
         FS.createStandardStreams(input, output, error);
       },
@@ -4160,18 +4108,17 @@ var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
   
   
   
-  var runtimeKeepaliveCounter = 0;
-  var keepRuntimeAlive = () => noExitRuntime || runtimeKeepaliveCounter > 0;
+  var keepRuntimeAlive = () => true;
   var _proc_exit = (code) => {
       EXITSTATUS = code;
       if (!keepRuntimeAlive()) {
-        Module['onExit']?.(code);
         ABORT = true;
       }
       quit_(code, new ExitStatus(code));
     };
   
   
+  var runtimeKeepaliveCounter = 0;
   /** @param {boolean|number=} implicit */
   var exitJS = (status, implicit) => {
       EXITSTATUS = status;
@@ -4367,8 +4314,6 @@ var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
         }
       },
   init() {
-        Module['preMainLoop'] && MainLoop.preMainLoop.push(Module['preMainLoop']);
-        Module['postMainLoop'] && MainLoop.postMainLoop.push(Module['postMainLoop']);
       },
   runIter(func) {
         if (ABORT) return;
@@ -4817,7 +4762,6 @@ var stringToUTF8Array = (str, heap, outIdx, maxBytesToWrite) => {
 
   
   var __emscripten_runtime_keepalive_clear = () => {
-      noExitRuntime = false;
       runtimeKeepaliveCounter = 0;
     };
   
@@ -8588,17 +8532,15 @@ var miniTempWebGLIntBuffersStorage = new Int32Array(288);
 {
 
   // Begin ATMODULES hooks
-  if (Module['noExitRuntime']) noExitRuntime = Module['noExitRuntime'];
-if (Module['preloadPlugins']) preloadPlugins = Module['preloadPlugins'];
+  
 if (Module['print']) out = Module['print'];
 if (Module['printErr']) err = Module['printErr'];
-if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
   // End ATMODULES hooks
 
   checkIncomingModuleAPI();
 
-  if (Module['arguments']) arguments_ = Module['arguments'];
-  if (Module['thisProgram']) thisProgram = Module['thisProgram'];
+  
+  
 
   // Assertions on removed incoming Module JS APIs.
   assert(typeof Module['memoryInitializerPrefixURL'] == 'undefined', 'Module.memoryInitializerPrefixURL option was removed, use Module.locateFile instead');
@@ -8616,13 +8558,6 @@ if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
   assert(typeof Module['wasmMemory'] == 'undefined', 'Use of `wasmMemory` detected.  Use -sIMPORTED_MEMORY to define wasmMemory externally');
   assert(typeof Module['INITIAL_MEMORY'] == 'undefined', 'Detected runtime INITIAL_MEMORY setting.  Use -sIMPORTED_MEMORY to define wasmMemory dynamically');
 
-  if (Module['preInit']) {
-    if (typeof Module['preInit'] == 'function') Module['preInit'] = [Module['preInit']];
-    while (Module['preInit'].length > 0) {
-      Module['preInit'].shift()();
-    }
-  }
-  consumedModuleProp('preInit');
 }
 
 // Begin runtime exports
@@ -8655,9 +8590,11 @@ if (Module['wasmBinary']) wasmBinary = Module['wasmBinary'];
   'getDynCaller',
   'asmjsMangle',
   'HandleAllocator',
+  'addOnPreRun',
   'addOnInit',
   'addOnPostCtor',
   'addOnPreMain',
+  'addOnPostRun',
   'STACK_SIZE',
   'STACK_ALIGN',
   'POINTER_SIZE',
@@ -8792,9 +8729,7 @@ missingLibrarySymbols.forEach(missingLibrarySymbol)
   'wasmMemory',
   'getUniqueRunDependency',
   'noExitRuntime',
-  'addOnPreRun',
   'addOnExit',
-  'addOnPostRun',
   'freeTableIndexes',
   'functionsInTableMap',
   'setValue',
@@ -9038,6 +8973,43 @@ unexportedSymbols.forEach(unexportedRuntimeSymbol);
 // end include: postlibrary.js
 
 function checkIncomingModuleAPI() {
+  ignoredModuleProp('ENVIRONMENT');
+  ignoredModuleProp('GL_MAX_TEXTURE_IMAGE_UNITS');
+  ignoredModuleProp('SDL_canPlayWithWebAudio');
+  ignoredModuleProp('SDL_numSimultaneouslyQueuedBuffers');
+  ignoredModuleProp('INITIAL_MEMORY');
+  ignoredModuleProp('wasmMemory');
+  ignoredModuleProp('arguments');
+  ignoredModuleProp('buffer');
+  ignoredModuleProp('doNotCaptureKeyboard');
+  ignoredModuleProp('dynamicLibraries');
+  ignoredModuleProp('elementPointerLock');
+  ignoredModuleProp('extraStackTrace');
+  ignoredModuleProp('forcedAspectRatio');
+  ignoredModuleProp('instantiateWasm');
+  ignoredModuleProp('keyboardListeningElement');
+  ignoredModuleProp('freePreloadedMediaOnUse');
+  ignoredModuleProp('mainScriptUrlOrBlob');
+  ignoredModuleProp('mem');
+  ignoredModuleProp('noExitRuntime');
+  ignoredModuleProp('noInitialRun');
+  ignoredModuleProp('onExit');
+  ignoredModuleProp('onFullScreen');
+  ignoredModuleProp('postMainLoop');
+  ignoredModuleProp('postRun');
+  ignoredModuleProp('preInit');
+  ignoredModuleProp('preMainLoop');
+  ignoredModuleProp('preRun');
+  ignoredModuleProp('preinitializedWebGLContext');
+  ignoredModuleProp('preloadPlugins');
+  ignoredModuleProp('statusMessage');
+  ignoredModuleProp('stderr');
+  ignoredModuleProp('stdin');
+  ignoredModuleProp('stdout');
+  ignoredModuleProp('thisProgram');
+  ignoredModuleProp('wasm');
+  ignoredModuleProp('wasmBinary');
+  ignoredModuleProp('websocket');
   ignoredModuleProp('fetchSettings');
   ignoredModuleProp('logReadFiles');
   ignoredModuleProp('loadSplitModule');
@@ -9859,7 +9831,7 @@ function run(args = arguments_) {
     Module['onRuntimeInitialized']?.();
     consumedModuleProp('onRuntimeInitialized');
 
-    var noInitialRun = Module['noInitialRun'] || false;
+    var noInitialRun = false;
     if (!noInitialRun) callMain(args);
 
     postRun();

@@ -19,6 +19,7 @@
     }
 
     #stage {
+      position: relative;
       aspect-ratio: 1080 / 1920;
       width: min(100vw, calc(100vh * 1080 / 1920));
       height: min(100vh, calc(100vw * 1920 / 1080));
@@ -30,6 +31,68 @@
       width: 100%;
       height: 100%;
     }
+
+    #loading {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      place-items: center;
+      background: black;
+      color: white;
+      font-family: sans-serif;
+      z-index: 10;
+    }
+
+    #loading.hidden {
+      display: none;
+    }
+
+    #loading-inner {
+      width: min(72%, 420px);
+      text-align: center;
+    }
+
+    #loading-text {
+      margin-bottom: 14px;
+      font-size: 16px;
+      line-height: 1.4;
+      opacity: 0.95;
+    }
+
+    #loading-bar-wrap {
+      width: 100%;
+      height: 12px;
+      background: rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    #loading-bar-fill {
+      width: 0%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.92);
+      transform-origin: left center;
+    }
+
+    #loading-detail {
+      margin-top: 10px;
+      font-size: 13px;
+      opacity: 0.72;
+      min-height: 1.2em;
+    }
+
+    #version-badge {
+      position: absolute;
+      right: 10px;
+      bottom: 8px;
+      z-index: 20;
+      font-family: sans-serif;
+      font-size: 11px;
+      line-height: 1;
+      color: rgba(255, 255, 255, 0.75);
+      pointer-events: none;
+      user-select: none;
+    }
   </style>
 </head>
 <body>
@@ -39,7 +102,182 @@
       width="1080"
       height="1920"
       oncontextmenu="event.preventDefault()"></canvas>
+
+    <div id="loading">
+      <div id="loading-inner">
+        <div id="loading-text">Loading…</div>
+        <div id="loading-bar-wrap" aria-hidden="true">
+          <div id="loading-bar-fill"></div>
+        </div>
+        <div id="loading-detail"></div>
+      </div>
+    </div>
+
+    <div id="version-badge">Version: c941c22</div>
   </div>
-  <script async type="text/javascript" src="kasino.js"></script>
+
+  <script>
+    (function () {
+      const WASM_NAME = "kasino.c941c22.wasm";
+
+      const loadingEl = document.getElementById("loading");
+      const loadingTextEl = document.getElementById("loading-text");
+      const loadingBarFillEl = document.getElementById("loading-bar-fill");
+      const loadingDetailEl = document.getElementById("loading-detail");
+
+      let runtimeReady = false;
+      let fakePercent = 0;
+      let realPercent = 0;
+      let targetPercent = 0;
+      let rafId = 0;
+      let dependenciesTotal = 0;
+
+      function setLoadingText(text) {
+        loadingTextEl.textContent = text || "Loading…";
+      }
+
+      function setLoadingDetail(text) {
+        loadingDetailEl.textContent = text || "";
+      }
+
+      function setBarPercent(percent) {
+        const clamped = Math.max(0, Math.min(100, percent));
+        loadingBarFillEl.style.width = clamped.toFixed(1) + "%";
+      }
+
+      function easeTowards(current, target) {
+        const diff = target - current;
+        if (Math.abs(diff) < 0.08) return target;
+        return current + diff * 0.08;
+      }
+
+      function tickProgress() {
+        if (!runtimeReady) {
+          const ceiling = 90;
+          const desired = Math.max(realPercent, Math.min(ceiling, targetPercent));
+
+          fakePercent = easeTowards(fakePercent, desired);
+
+          if (fakePercent < ceiling) {
+            fakePercent += 0.18;
+          }
+
+          if (fakePercent > ceiling) {
+            fakePercent = ceiling;
+          }
+
+          setBarPercent(fakePercent);
+
+          if (dependenciesTotal > 0) {
+            setLoadingText(`Loading… ${Math.round(fakePercent)}%`);
+          } else {
+            setLoadingText("Loading…");
+          }
+
+          rafId = requestAnimationFrame(tickProgress);
+          return;
+        }
+
+        fakePercent = easeTowards(fakePercent, 100);
+        if (fakePercent > 99.92) fakePercent = 100;
+
+        setBarPercent(fakePercent);
+        setLoadingText(fakePercent >= 100 ? "Ready" : `Starting… ${Math.round(fakePercent)}%`);
+
+        if (fakePercent < 100) {
+          rafId = requestAnimationFrame(tickProgress);
+        } else {
+          loadingEl.classList.add("hidden");
+        }
+      }
+
+      function ensureProgressLoop() {
+        if (!rafId) {
+          rafId = requestAnimationFrame(tickProgress);
+        }
+      }
+
+      ensureProgressLoop();
+
+      var Module = {
+        canvas: document.getElementById("canvas"),
+
+        locateFile: function(path, prefix) {
+          if (path.endsWith(".wasm")) {
+            return prefix + WASM_NAME;
+          }
+          return prefix + path;
+        },
+
+        setStatus: function(text) {
+          if (!text) return;
+
+          const match = text.match(/\((\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)\)/);
+          if (match) {
+            const current = parseFloat(match[1]);
+            const total = parseFloat(match[2]);
+            if (total > 0) {
+              realPercent = Math.max(realPercent, Math.round((current / total) * 100));
+              targetPercent = realPercent;
+            }
+          }
+
+          if (!runtimeReady) {
+            setLoadingDetail(text.replace(/\s*\(\d+(?:\.\d+)?\/\d+(?:\.\d+)?\)\s*/, ""));
+          }
+        },
+
+        monitorRunDependencies: (function () {
+          let maxDependencies = 0;
+
+          return function (left) {
+            maxDependencies = Math.max(maxDependencies, left);
+            dependenciesTotal = maxDependencies;
+
+            if (maxDependencies > 0) {
+              const done = maxDependencies - left;
+              const percent = Math.round((done / maxDependencies) * 100);
+
+              realPercent = Math.max(realPercent, percent);
+              targetPercent = left === 0 ? 90 : Math.max(targetPercent, percent);
+
+              if (left > 0) {
+                setLoadingDetail(`Starting app (${done}/${maxDependencies})`);
+              } else {
+                setLoadingDetail("Finalizing startup…");
+              }
+            }
+          };
+        })(),
+
+        onRuntimeInitialized: function() {
+          runtimeReady = true;
+          targetPercent = 100;
+          realPercent = 100;
+          setLoadingDetail("");
+        },
+
+        onAbort: function(reason) {
+          cancelAnimationFrame(rafId);
+          rafId = 0;
+          setBarPercent(fakePercent);
+          setLoadingText("Could not start app");
+          setLoadingDetail(String(reason || "Unknown error"));
+        },
+
+        print: function(text) {
+          console.log(text);
+        },
+
+        printErr: function(text) {
+          console.error(text);
+        }
+      };
+
+      window.Module = Module;
+    })();
+  </script>
+
+  <script async type="text/javascript" src="kasino.c941c22.js"></script>
 </body>
 </html>
