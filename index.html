@@ -12,6 +12,12 @@
       height: 100%;
       background: black;
       overflow: hidden;
+      /* The app handles all input itself: no text selection, no long-press
+         callout, no tap highlight. */
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
@@ -46,6 +52,7 @@
       width: 100% !important;
       height: 100% !important;
       background: black;
+      touch-action: none;
     }
 
     #loading {
@@ -121,7 +128,7 @@
 
   <script>
     (function () {
-      const WASM_NAME = "kasino.243b4be.wasm";
+      const WASM_NAME = "kasino.243b4be-dev120157.wasm";
 
       const sdlCanvas = document.getElementById("canvas");
 
@@ -281,6 +288,6 @@
     })();
   </script>
 
-  <script async type="text/javascript" src="kasino.243b4be.js"></script>
+  <script async type="text/javascript" src="kasino.243b4be-dev120157.js"></script>
 </body>
 </html>
