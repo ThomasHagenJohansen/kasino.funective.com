@@ -115,6 +115,15 @@
       height="1920"
       oncontextmenu="event.preventDefault()"></canvas>
 
+    <!-- Hidden input: SDL's emscripten driver has no on-screen keyboard
+         support, so mobile browsers type through this element instead. -->
+    <input id="ti" type="text"
+      autocomplete="off" autocorrect="off" autocapitalize="off"
+      spellcheck="false" enterkeyhint="done"
+      style="position: fixed; top: 0; left: 0; width: 2px; height: 2px;
+             opacity: 0.01; border: 0; padding: 0; background: transparent;
+             color: transparent; caret-color: transparent; z-index: 30;">
+
     <div id="loading">
       <div id="loading-inner">
         <div id="loading-text">Loading…</div>
@@ -128,9 +137,55 @@
 
   <script>
     (function () {
-      const WASM_NAME = "kasino.243b4be-dev120157.wasm";
+      const WASM_NAME = "kasino.91bc412-dev224616.wasm";
 
       const sdlCanvas = document.getElementById("canvas");
+
+      // --- Mobile text input bridge ---------------------------------------
+      // The app arms window.kasinoWantsKeyboard when a text field is active.
+      // iOS only opens the on-screen keyboard from a user gesture, so we
+      // focus the hidden input from pointerup handlers as well.
+      const ti = document.getElementById("ti");
+      window.kasinoWantsKeyboard = false;
+
+      function callApp(name, argTypes, args) {
+        if (window.Module && typeof Module.ccall === "function") {
+          try { Module.ccall(name, null, argTypes, args); } catch (e) {}
+        }
+      }
+
+      ti.addEventListener("input", (e) => {
+        if (e.inputType === "deleteContentBackward") {
+          callApp("kasinoWebBackspace", [], []);
+        } else if (e.inputType === "insertLineBreak") {
+          callApp("kasinoWebSubmit", [], []);
+        } else if (e.data) {
+          callApp("kasinoWebTextInput", ["string"], [e.data]);
+        } else if (ti.value) {
+          // Autocorrect/swipe insertions arrive without e.data.
+          callApp("kasinoWebTextInput", ["string"], [ti.value]);
+        }
+        ti.value = "";
+      });
+
+      ti.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          callApp("kasinoWebSubmit", [], []);
+        }
+      });
+
+      // iOS Safari only opens the keyboard when focus() runs inside a
+      // qualifying user gesture — touchend is the reliable one (click never
+      // fires on the canvas because SDL preventDefaults touch events).
+      function focusIfWanted() {
+        if (window.kasinoWantsKeyboard && document.activeElement !== ti) {
+          ti.focus({ preventScroll: true });
+        }
+      }
+      document.addEventListener("touchend", focusIfWanted);
+      document.addEventListener("pointerup", focusIfWanted);
+      document.addEventListener("click", focusIfWanted);
 
       const loadingEl = document.getElementById("loading");
       const loadingTextEl = document.getElementById("loading-text");
@@ -185,17 +240,9 @@
           return;
         }
 
-        fakePercent = easeTowards(fakePercent, 100);
-        if (fakePercent > 99.92) fakePercent = 100;
-
-        setBarPercent(fakePercent);
-        setLoadingText(fakePercent >= 100 ? "Ready" : `Starting… ${Math.round(fakePercent)}%`);
-
-        if (fakePercent < 100) {
-          rafId = requestAnimationFrame(tickProgress);
-        } else {
-          loadingEl.classList.add("hidden");
-        }
+        // Runtime is ready: hide immediately, no cosmetic easing.
+        setBarPercent(100);
+        loadingEl.classList.add("hidden");
       }
 
       function ensureProgressLoop() {
@@ -288,6 +335,6 @@
     })();
   </script>
 
-  <script async type="text/javascript" src="kasino.243b4be-dev120157.js"></script>
+  <script async type="text/javascript" src="kasino.91bc412-dev224616.js"></script>
 </body>
 </html>
