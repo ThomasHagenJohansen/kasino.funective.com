@@ -137,7 +137,7 @@
 
   <script>
     (function () {
-      const WASM_NAME = "kasino.104ab1c.wasm";
+      const WASM_NAME = "kasino.f587857-dev004858.wasm";
 
       const sdlCanvas = document.getElementById("canvas");
 
@@ -186,6 +186,39 @@
       document.addEventListener("touchend", focusIfWanted);
       document.addEventListener("pointerup", focusIfWanted);
       document.addEventListener("click", focusIfWanted);
+
+      // --- Relay transport bridge -----------------------------------------
+      // The C side (net.c) drives these; WebSocket events flow back through
+      // the kasinoNet* wasm exports. Everything is WebSocket (hosting too),
+      // and the room code arrives in the roster messages.
+      const RELAY_URL = "wss://kasino-relay.thj-c83.workers.dev";
+      let relayWs = null;
+
+      function relayConnect(path) {
+        const ws = new WebSocket(RELAY_URL + path);
+        relayWs = ws;
+        ws.onopen = () => callApp("kasinoNetOpen", [], []);
+        ws.onmessage = (e) => callApp("kasinoNetMessage", ["string"], [String(e.data)]);
+        ws.onerror = () => callApp("kasinoNetError", ["string"], ["connection failed"]);
+        ws.onclose = () => callApp("kasinoNetClosed", [], []);
+      }
+
+      window.kasinoNetHost = function (max, teams, name) {
+        relayConnect("/host?max=" + max + "&teams=" + (teams ? 1 : 0) +
+                     "&name=" + encodeURIComponent(name));
+      };
+
+      window.kasinoNetJoin = function (code, name) {
+        relayConnect("/join/" + code + "?name=" + encodeURIComponent(name));
+      };
+
+      window.kasinoNetSend = function (data) {
+        if (relayWs && relayWs.readyState === 1) relayWs.send(data);
+      };
+
+      window.kasinoNetLeave = function () {
+        if (relayWs) { relayWs.onclose = null; relayWs.close(); relayWs = null; }
+      };
 
       const loadingEl = document.getElementById("loading");
       const loadingTextEl = document.getElementById("loading-text");
@@ -335,6 +368,6 @@
     })();
   </script>
 
-  <script async type="text/javascript" src="kasino.104ab1c.js"></script>
+  <script async type="text/javascript" src="kasino.f587857-dev004858.js"></script>
 </body>
 </html>
