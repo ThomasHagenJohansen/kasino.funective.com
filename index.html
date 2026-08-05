@@ -137,7 +137,7 @@
 
   <script>
     (function () {
-      const WASM_NAME = "kasino.eec6a1c.wasm";
+      const WASM_NAME = "kasino.eec6a1c-dev173144.wasm";
 
       const sdlCanvas = document.getElementById("canvas");
 
@@ -219,6 +219,15 @@
       window.kasinoNetLeave = function () {
         if (relayWs) { relayWs.onclose = null; relayWs.close(); relayWs = null; }
       };
+
+      // When the phone unlocks, the socket may have died while the page was
+      // suspended; nudge the app so it reconnects immediately.
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden && relayWs && relayWs.readyState > 1) {
+          relayWs = null;
+          callApp("kasinoNetClosed", [], []);
+        }
+      });
 
       const loadingEl = document.getElementById("loading");
       const loadingTextEl = document.getElementById("loading-text");
@@ -368,6 +377,6 @@
     })();
   </script>
 
-  <script async type="text/javascript" src="kasino.eec6a1c.js"></script>
+  <script async type="text/javascript" src="kasino.eec6a1c-dev173144.js"></script>
 </body>
 </html>
