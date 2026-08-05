@@ -137,7 +137,7 @@
 
   <script>
     (function () {
-      const WASM_NAME = "kasino.2cf1054.wasm";
+      const WASM_NAME = "kasino.eec6a1c.wasm";
 
       const sdlCanvas = document.getElementById("canvas");
 
@@ -203,13 +203,13 @@
         ws.onclose = () => callApp("kasinoNetClosed", [], []);
       }
 
-      window.kasinoNetHost = function (max, teams, name) {
+      window.kasinoNetHost = function (max, teams, name, pid) {
         relayConnect("/host?max=" + max + "&teams=" + (teams ? 1 : 0) +
-                     "&name=" + encodeURIComponent(name));
+                     "&name=" + encodeURIComponent(name) + "&pid=" + pid);
       };
 
-      window.kasinoNetJoin = function (code, name) {
-        relayConnect("/join/" + code + "?name=" + encodeURIComponent(name));
+      window.kasinoNetJoin = function (code, name, pid) {
+        relayConnect("/join/" + code + "?name=" + encodeURIComponent(name) + "&pid=" + pid);
       };
 
       window.kasinoNetSend = function (data) {
@@ -368,6 +368,6 @@
     })();
   </script>
 
-  <script async type="text/javascript" src="kasino.2cf1054.js"></script>
+  <script async type="text/javascript" src="kasino.eec6a1c.js"></script>
 </body>
 </html>
