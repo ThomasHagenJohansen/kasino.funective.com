@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "dk.thj.kasino",
+      "sha256_cert_fingerprints": [
+        "19:9A:7C:27:1E:FF:27:81:73:97:13:5A:3F:E7:61:E1:75:7F:2E:10:A9:9F:3B:43:8C:C3:E7:7C:FF:1F:E2:F5"
+      ]
+    }
+  }
+]

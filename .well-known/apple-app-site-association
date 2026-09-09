@@ -1,0 +1,16 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["JY77UWNX42.dk.thj.kasino"],
+        "components": [
+          {
+            "/": "/",
+            "?": { "join": "*" },
+            "comment": "Open scanned lobby join links (/?join=CODE) in the app"
+          }
+        ]
+      }
+    ]
+  }
+}
